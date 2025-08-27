@@ -43,6 +43,8 @@ dependencies {
     implementation(files("libs/filament-v1.63.1-android.aar"))
     implementation(files("libs/gltfio-v1.63.1-android.aar"))
     implementation(libs.core.ktx)
+    implementation ("io.reactivex.rxjava3:rxjava:3.1.10")
+    implementation ("io.reactivex.rxjava3:rxandroid:3.0.2")
 }
 
 

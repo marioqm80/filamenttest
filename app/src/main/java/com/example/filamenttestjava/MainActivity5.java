@@ -8,11 +8,14 @@ import android.view.Choreographer;
 import android.view.Surface;
 import android.view.SurfaceView;
 
+import com.example.filamenttestjava.utils.AssetLinePublisher;
+import com.example.filamenttestjava.utils.IgcParser;
 import com.example.filamenttestjava.vulkanapp.FilamentApp;
 import com.example.filamenttestjava.vulkanapp.Geometry;
 import com.google.android.filament.android.DisplayHelper;
 import com.google.android.filament.android.UiHelper;
 
+import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
 
@@ -34,9 +37,34 @@ public class MainActivity5 extends Activity {
 
     private FilamentApp app;
 
+    private final AssetLinePublisher publisher = new AssetLinePublisher();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        publisher.lines()
+                .filter(l -> l != null && l.startsWith("B"))
+                .subscribe(
+                line -> {
+                    // cada linha do arquivo
+                    // ex.: log/atualiza UI
+                    System.out.println("linha arquivo: " + line);
+                    double[] latLon = IgcParser.parseBRecordLatLon(line);
+                    System.out.println("latitude e longitude = " + new DecimalFormat("0.00000").format(latLon[0]) + " lon " + new DecimalFormat("0.00000").format(latLon[1]));
+                    Thread.sleep(1000);
+                },
+                throwable -> {
+                    // tratar erro de leitura
+                },
+                () -> {
+                    // terminou de ler
+                }
+        );
+
+        publisher.read(this, "test.igc");
+
+
 
         surfaceView = new SurfaceView(this);
         setContentView(surfaceView);
