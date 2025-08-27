@@ -1,0 +1,30 @@
+material {
+    name : lit_vertex_color_alpha,
+
+    shadingModel : lit,
+
+    // habilita transparência (usa material.baseColor.a)
+    blending : masked,
+
+    // vamos ler a cor do atributo de vértice
+    requires : [ color ],
+
+    // ainda expomos roughness/metallic como parâmetros
+    parameters : [
+        { type: float, name: roughness },
+        { type: float, name: metallic }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs m) {
+        prepareMaterial(m);
+
+        // Cor por vértice (rgba). O Filament entrega em espaço linear.
+        vec4 vcolor = getColor();
+
+        m.baseColor = vcolor;                      // usa a cor + alfa do vértice
+        m.roughness = materialParams.roughness;    // ajuste como preferir
+        m.metallic  = materialParams.metallic;
+    }
+}
