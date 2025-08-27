@@ -19,6 +19,8 @@ import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
 
+import io.reactivex.rxjava3.subjects.PublishSubject;
+
 public class MainActivity5 extends Activity {
 
     static {
@@ -39,6 +41,8 @@ public class MainActivity5 extends Activity {
 
     private final AssetLinePublisher publisher = new AssetLinePublisher();
 
+    private final PublishSubject<double[]> latLonSubject = PublishSubject.create();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -53,6 +57,7 @@ public class MainActivity5 extends Activity {
                     double[] latLon = IgcParser.parseBRecordLatLon(line);
                     System.out.println("latitude e longitude = " + new DecimalFormat("0.00000").format(latLon[0]) + " lon " + new DecimalFormat("0.00000").format(latLon[1]));
                     Thread.sleep(1000);
+                    latLonSubject.onNext(latLon);
                 },
                 throwable -> {
                     // tratar erro de leitura
@@ -101,7 +106,7 @@ public class MainActivity5 extends Activity {
         Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
         Handler currentHandler = new Handler(looper);
         // <= AQUI: popular a malha dinâmica antes de renderizar
-        java.util.List<double[]> cube = Geometry.makeUnitCubeTris(0.2, 0.3);
+        java.util.List<double[]> cube = Geometry.makeUnitCubeTris(0.2, 0.3, 0, 0);
         long delay = 1;
         int cont = 1;
         for (double[] triangulo: cube) {
@@ -114,7 +119,7 @@ public class MainActivity5 extends Activity {
 
         }
 
-        cube = Geometry.makeUnitCubeTris(0.1, 0);
+        cube = Geometry.makeUnitCubeTris(0.1, 0, 0, 0);
          delay = 1000;
          cont = 1;
         for (double[] triangulo: cube) {

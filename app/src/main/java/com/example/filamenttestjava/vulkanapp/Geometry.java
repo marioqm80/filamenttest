@@ -12,20 +12,20 @@ public final class Geometry {
     }
 
     /** Cubo de lado 2 centrado na origem. */
-    public static List<double[]> makeUnitCubeTris(double fator, double dx) {
+    public static List<double[]> makeUnitCubeTris(double fator, double dx, double dy, double dz) {
         double[] p000 = {-1,-1,-1}, p001 = {-1,-1, 1};
         double[] p010 = {-1, 1,-1}, p011 = {-1, 1, 1};
         double[] p100 = { 1,-1,-1}, p101 = { 1,-1, 1};
         double[] p110 = { 1, 1,-1}, p111 = { 1, 1, 1};
 
-        aplicaFator(p000, fator, dx);
-        aplicaFator(p010, fator, dx);
-        aplicaFator(p100, fator, dx);
-        aplicaFator(p110, fator, dx);
-        aplicaFator(p001, fator, dx);
-        aplicaFator(p011, fator, dx);
-        aplicaFator(p101, fator, dx);
-        aplicaFator(p111, fator, dx);
+        aplicaFator(p000, fator, dx, dy, dz);
+        aplicaFator(p010, fator, dx, dy, dz);
+        aplicaFator(p100, fator, dx, dy, dz);
+        aplicaFator(p110, fator, dx, dy, dz);
+        aplicaFator(p001, fator, dx, dy, dz);
+        aplicaFator(p011, fator, dx, dy, dz);
+        aplicaFator(p101, fator, dx, dy, dz);
+        aplicaFator(p111, fator, dx, dy, dz);
 
         List<double[]> tris = new ArrayList<>(12);
         // -Z
@@ -43,10 +43,10 @@ public final class Geometry {
         return tris;
     }
 
-    private static void aplicaFator(double[] p, double fator, double dx) {
+    private static void aplicaFator(double[] p, double fator, double dx, double dy, double dz) {
         p[0] = p[0]*fator + dx;
-        p[1] = p[1]*fator;
-        p[2] = p[2]*fator;
+        p[1] = p[1]*fator + dy;
+        p[2] = p[2]*fator + dz;
     }
 
     // ===========================
