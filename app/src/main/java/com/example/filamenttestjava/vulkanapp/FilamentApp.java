@@ -9,6 +9,7 @@ import android.view.Surface;
 import android.view.animation.LinearInterpolator;
 import android.animation.ValueAnimator;
 
+import com.example.filamenttestjava.MainActivity5;
 import com.google.android.filament.Box;
 import com.google.android.filament.Camera;
 import com.google.android.filament.Colors;
@@ -60,7 +61,7 @@ public class FilamentApp {
     private final ValueAnimator animatorPlano = ValueAnimator.ofFloat(0f, 360f);
 
     /** Construtor padrão (capacidade “ok” para crescer). */
-    public FilamentApp(Context ctx) { this(ctx, 12000); }
+    public FilamentApp(Context ctx) { this(ctx, 120000); }
 
     /** Construtor com capacidade máxima de triângulos. */
     public FilamentApp(Context ctx, int maxTriangles) {
@@ -156,7 +157,7 @@ public class FilamentApp {
         // renderable inicial — count=0, AABB não-vazio minúsculo para evitar crash
         renderablePlano = EntityManager.get().create();
         new RenderableManager.Builder(1)
-                .boundingBox(new Box(0f, 0f, 0f, 1e-3f, 1e-3f, 1e-3f))
+                .boundingBox(new Box(0f, 0f, 0f, 10000f, 10000f, 10000f))
                 .geometry(0, RenderableManager.PrimitiveType.TRIANGLES,
                         dyn2.getVertexBuffer(), dyn2.getIndexBuffer(), 0, dyn2.getIndexCount())
                 .material(0, materialInstance)
@@ -169,7 +170,7 @@ public class FilamentApp {
         // exposição e câmera
         camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f);
         //camera.lookAt(0.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-        camera.lookAt(0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+        camera.lookAt(0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, 3000.1, 0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, -10.0, 0.0, 1.0, 0.0);
 
         // animação de rotação
         animator.setInterpolator(new LinearInterpolator());

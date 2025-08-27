@@ -9,6 +9,7 @@ import android.view.Surface;
 import android.view.SurfaceView;
 
 import com.example.filamenttestjava.utils.AssetLinePublisher;
+import com.example.filamenttestjava.utils.CalculoDistancias;
 import com.example.filamenttestjava.utils.IgcParser;
 import com.example.filamenttestjava.vulkanapp.FilamentApp;
 import com.example.filamenttestjava.vulkanapp.Geometry;
@@ -18,7 +19,9 @@ import com.google.android.filament.android.UiHelper;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 
 public class MainActivity5 extends Activity {
@@ -31,6 +34,11 @@ public class MainActivity5 extends Activity {
         }
     }
 
+    /*public static final float dxInicial = -3.6491666667f;
+    public static final float dyInicial = 37.7518666667f;*/
+
+    public static final float dxInicial = 0f;
+    public static final float dyInicial = 0f;
     private SurfaceView surfaceView;
     private UiHelper uiHelper;
     private DisplayHelper displayHelper;
@@ -42,6 +50,7 @@ public class MainActivity5 extends Activity {
     private final AssetLinePublisher publisher = new AssetLinePublisher();
 
     private final PublishSubject<double[]> latLonSubject = PublishSubject.create();
+    private final PublishSubject<double[]> pixelModeloSubject = PublishSubject.create();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,14 +58,15 @@ public class MainActivity5 extends Activity {
 
         publisher.lines()
                 .filter(l -> l != null && l.startsWith("B"))
+                .subscribeOn(Schedulers.io())
                 .subscribe(
                 line -> {
                     // cada linha do arquivo
                     // ex.: log/atualiza UI
-                    System.out.println("linha arquivo: " + line);
+
                     double[] latLon = IgcParser.parseBRecordLatLon(line);
-                    System.out.println("latitude e longitude = " + new DecimalFormat("0.00000").format(latLon[0]) + " lon " + new DecimalFormat("0.00000").format(latLon[1]));
-                    Thread.sleep(1000);
+                    //System.out.println("latitude e longitude = " + new DecimalFormat("0.00000").format(latLon[0]) + " lon " + new DecimalFormat("0.00000").format(latLon[1]));
+                    Thread.sleep(10);
                     latLonSubject.onNext(latLon);
                 },
                 throwable -> {
@@ -67,7 +77,31 @@ public class MainActivity5 extends Activity {
                 }
         );
 
+
+
         publisher.read(this, "test.igc");
+
+        latLonSubject
+                .subscribeOn(Schedulers.io())
+                .subscribe( latLon -> {
+
+                });
+        final AtomicReference<double[]> latLonInicial = new AtomicReference<>(null);
+        latLonSubject
+                .subscribeOn(Schedulers.io())
+                .subscribe( latLon -> {
+                    System.out.println("latitude e longitude = " + new DecimalFormat("0.0000000000").format(latLon[0]) + " lon " + new DecimalFormat("0.0000000000").format(latLon[1]));
+                    if (latLonInicial.get() == null) {
+                        double[] tmp = new double[] {latLon[0], latLon[1]};
+                        latLonInicial.set(tmp);
+                        pixelModeloSubject.onNext(new double[] {0, 0});
+                    } else {
+                        pixelModeloSubject.onNext(CalculoDistancias.getPixelModelo(latLonInicial.get()[0],
+                                latLonInicial.get()[1],
+                                latLon[0],
+                                latLon[1]));
+                    }
+                });
 
 
 
@@ -106,7 +140,7 @@ public class MainActivity5 extends Activity {
         Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
         Handler currentHandler = new Handler(looper);
         // <= AQUI: popular a malha dinâmica antes de renderizar
-        java.util.List<double[]> cube = Geometry.makeUnitCubeTris(0.2, 0.3, 0, 0);
+        List<double[]> cube = Geometry.makeUnitCubeTris(0.2, 0.3 + MainActivity5.dxInicial, 0 + MainActivity5.dyInicial, 0);
         long delay = 1;
         int cont = 1;
         for (double[] triangulo: cube) {
@@ -132,12 +166,20 @@ public class MainActivity5 extends Activity {
 
         }
 
-        double dist = 0.8d;
-        double z = -1;
-        List<double[]> plano = Geometry.makeQuadDuplaFace(new double[] {-dist, -dist, z}, new double[] {-dist, dist, z}, new double[] {dist, dist, z}, new double[] {dist, -dist, z});
+        double dist = 50.8d;
+        double z = -10;
+        List<double[]> plano = Geometry.makeQuadDuplaFace(new double[] {-dist + dxInicial, -dist + dyInicial, z}, new double[] {-dist + dxInicial, dist + dyInicial, z}, new double[] {dist + dxInicial, dist + dyInicial, z}, new double[] {dist + dxInicial, -dist + dyInicial, z});
         currentHandler.postDelayed(() ->{
-            app.addTriangles(plano, 1);
-        }, 1000);
+            //app.addTriangles(plano, 1);
+        }, 0);
+
+        pixelModeloSubject
+                .subscribeOn(Schedulers.io())
+                .subscribe( modelo -> {
+                    System.out.println("pixel modelo x y= " + new DecimalFormat("0.0000000000").format(modelo[0]) + " lon " + new DecimalFormat("0.0000000000").format(modelo[1]));
+                    final List<double[]> cube2 = Geometry.makeUnitCubeTris(5, modelo[0], modelo[1], 0);
+                    app.addTriangles(cube2, 1);
+                });
 
 
     }
