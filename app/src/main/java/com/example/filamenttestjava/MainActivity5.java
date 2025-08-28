@@ -10,6 +10,7 @@ import android.view.SurfaceView;
 
 import com.example.filamenttestjava.utils.AssetLinePublisher;
 import com.example.filamenttestjava.utils.CalculoDistancias;
+import com.example.filamenttestjava.utils.CorUtil;
 import com.example.filamenttestjava.utils.IgcParser;
 import com.example.filamenttestjava.vulkanapp.FilamentApp;
 import com.example.filamenttestjava.vulkanapp.Geometry;
@@ -52,6 +53,10 @@ public class MainActivity5 extends Activity {
     private final PublishSubject<double[]> latLonSubject = PublishSubject.create();
     private final PublishSubject<double[]> pixelModeloSubject = PublishSubject.create();
 
+    private final PublishSubject<double[]> altitudeGpsPublisher = PublishSubject.create();
+
+    public static final long sleep = 30;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -66,8 +71,9 @@ public class MainActivity5 extends Activity {
 
                     double[] latLon = IgcParser.parseBRecordLatLon(line);
                     //System.out.println("latitude e longitude = " + new DecimalFormat("0.00000").format(latLon[0]) + " lon " + new DecimalFormat("0.00000").format(latLon[1]));
-                    Thread.sleep(10);
-                    latLonSubject.onNext(latLon);
+                    Thread.sleep(sleep);
+                    int altitudeGpsMetros = IgcParser.parseBRecordGpsAltitudeMeters(line);
+                    latLonSubject.onNext(new double[] {latLon[0], latLon[1], (double) altitudeGpsMetros});
                 },
                 throwable -> {
                     // tratar erro de leitura
@@ -94,12 +100,13 @@ public class MainActivity5 extends Activity {
                     if (latLonInicial.get() == null) {
                         double[] tmp = new double[] {latLon[0], latLon[1]};
                         latLonInicial.set(tmp);
-                        pixelModeloSubject.onNext(new double[] {0, 0});
+                        pixelModeloSubject.onNext(new double[] {0, 0, latLon[2]});
                     } else {
-                        pixelModeloSubject.onNext(CalculoDistancias.getPixelModelo(latLonInicial.get()[0],
+                        double[] modelo = CalculoDistancias.getPixelModelo(latLonInicial.get()[0],
                                 latLonInicial.get()[1],
                                 latLon[0],
-                                latLon[1]));
+                                latLon[1]);
+                        pixelModeloSubject.onNext(new double[] {modelo[0], modelo[1], latLon[2]});
                     }
                 });
 
@@ -140,46 +147,47 @@ public class MainActivity5 extends Activity {
         Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
         Handler currentHandler = new Handler(looper);
         // <= AQUI: popular a malha dinâmica antes de renderizar
-        List<double[]> cube = Geometry.makeUnitCubeTris(0.2, 0.3 + MainActivity5.dxInicial, 0 + MainActivity5.dyInicial, 0);
-        long delay = 1;
-        int cont = 1;
-        for (double[] triangulo: cube) {
-            List<double[]> tmp = Arrays.asList(triangulo);
-            currentHandler.postDelayed(() -> {
-                app.addTriangles(tmp, 0); // usa o seu método que faz dyn.addTriangles+upload+apply+AABB
 
-            }, cont * delay);
-            cont++;
 
-        }
 
-        cube = Geometry.makeUnitCubeTris(0.1, 0, 0, 0);
-         delay = 1000;
-         cont = 1;
-        for (double[] triangulo: cube) {
-            List<double[]> tmp = Arrays.asList(triangulo);
-            currentHandler.postDelayed(() -> {
-                app.addTriangles(tmp, 0); // usa o seu método que faz dyn.addTriangles+upload+apply+AABB
 
-            }, cont * delay);
-            cont++;
 
-        }
 
-        double dist = 50.8d;
-        double z = -10;
-        List<double[]> plano = Geometry.makeQuadDuplaFace(new double[] {-dist + dxInicial, -dist + dyInicial, z}, new double[] {-dist + dxInicial, dist + dyInicial, z}, new double[] {dist + dxInicial, dist + dyInicial, z}, new double[] {dist + dxInicial, -dist + dyInicial, z});
-        currentHandler.postDelayed(() ->{
-            //app.addTriangles(plano, 1);
+        currentHandler.postDelayed(() -> {
+
+            pixelModeloSubject
+                    .subscribeOn(Schedulers.io())
+                    .buffer(2, 1)
+                    .filter(list -> list.size() == 2)
+                    .subscribe( listaModelo -> {
+                        double[] modelo = listaModelo.get(1);
+                        //app.atualizaNovaPosicaoCamera(modelo);
+                        float[] eyeTo = new float[] {(float) modelo[0], (float) modelo[0], 100};
+                        float[] centerTo = new float[] {(float) modelo[0], (float) modelo[0], (float) modelo[0]};
+                        app.atualizaNovaPosicaoCamera(listaModelo.get(0), listaModelo.get(1));
+                    });
         }, 0);
 
+        currentHandler.postDelayed(() -> {
         pixelModeloSubject
                 .subscribeOn(Schedulers.io())
-                .subscribe( modelo -> {
-                    System.out.println("pixel modelo x y= " + new DecimalFormat("0.0000000000").format(modelo[0]) + " lon " + new DecimalFormat("0.0000000000").format(modelo[1]));
-                    final List<double[]> cube2 = Geometry.makeUnitCubeTris(5, modelo[0], modelo[1], 0);
-                    app.addTriangles(cube2, 1);
+                .buffer(2, 1)
+                .filter(list -> list.size() == 2)
+                .subscribe( listaModelo -> {
+
+                    double maxVarioCor = 5;
+
+
+                    double vario = listaModelo.get(1)[2] - listaModelo.get(0)[2];
+                    double[] corVario2 = CorUtil.getCorVarioErico(false, 255, vario, -3d, maxVarioCor, 0d, maxVarioCor / 3f, (maxVarioCor * 2f) / 3f);
+
+
+
+                    final List<double[]> cube2 = Geometry.makeCylinderTris(listaModelo.get(0), listaModelo.get(1), 2, 15, 15, true);
+                    app.addTriangles(cube2, 1, corVario2);
+
                 });
+    }, 0);
 
 
     }

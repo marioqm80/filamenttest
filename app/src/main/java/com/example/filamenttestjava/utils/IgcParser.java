@@ -40,4 +40,34 @@ public final class IgcParser {
 
         return new double[]{ latDecimal, lonDecimal };
     }
+
+    /**
+     * Extrai a altitude GNSS (GPS) em metros de um B-record IGC.
+     * Ex.: "B1226083742168N00359302WA017940185600980412900646" -> 1856
+     */
+    public static int parseBRecordGpsAltitudeMeters(String b) {
+        if (b == null || b.length() < 35 || b.charAt(0) != 'B') {
+            throw new IllegalArgumentException("B-record inválido");
+        }
+
+        int idx = 1;       // 'B'
+        idx += 6;          // HHMMSS
+        idx += 7;          // latitude DDMMmmm
+        idx += 1;          // N/S
+        idx += 8;          // longitude DDDMMmmm
+        idx += 1;          // E/W
+        idx += 1;          // validade do fixo: 'A' ou 'V'
+
+        // próximo campo: altitude de pressão (5 chars) — pulamos
+        idx += 5;
+
+        // agora: altitude GNSS (5 chars), pode ter sinal
+        String gAlt = b.substring(idx, idx + 5);
+        try {
+            return Integer.parseInt(gAlt);
+        } catch (NumberFormatException e) {
+            // alguns loggers podem preencher com espaços; tente limpar
+            return Integer.parseInt(gAlt.trim());
+        }
+    }
 }

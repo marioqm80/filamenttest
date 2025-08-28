@@ -10,6 +10,9 @@ import android.view.animation.LinearInterpolator;
 import android.animation.ValueAnimator;
 
 import com.example.filamenttestjava.MainActivity5;
+
+import com.example.filamenttestjava.utils.CalculoVetor;
+import com.example.filamenttestjava.utils.CameraAnimator;
 import com.google.android.filament.Box;
 import com.google.android.filament.Camera;
 import com.google.android.filament.Colors;
@@ -37,6 +40,8 @@ public class FilamentApp {
     private Scene scene;
     private View view;
     private Camera camera;
+
+
     private SwapChain swapChain;
 
     // Material
@@ -55,13 +60,15 @@ public class FilamentApp {
     @Entity private int renderablePlano = 1;
     @Entity private int sun = 0;
 
+    @Entity private int camEntity = 0;
+
     HandlerThread filamentThread;
 
     private final ValueAnimator animator = ValueAnimator.ofFloat(0f, 360f);
     private final ValueAnimator animatorPlano = ValueAnimator.ofFloat(0f, 360f);
 
     /** Construtor padrão (capacidade “ok” para crescer). */
-    public FilamentApp(Context ctx) { this(ctx, 120000); }
+    public FilamentApp(Context ctx) { this(ctx, 1200000); }
 
     /** Construtor com capacidade máxima de triângulos. */
     public FilamentApp(Context ctx, int maxTriangles) {
@@ -93,6 +100,7 @@ public class FilamentApp {
     }
 
 
+
     private void initEngine() {
 
 
@@ -107,15 +115,17 @@ public class FilamentApp {
             renderer = engine.createRenderer();
             scene = engine.createScene();
             view = engine.createView();
-            int camEntity = EntityManager.get().create();
-            camera = engine.createCamera(camEntity);
+            camEntity = EntityManager.get().create();
+            camera = engine.createCamera(camEntity)
+            ;
+
 
     }
 
     private void initView() {
         //scene.setSkybox(new Skybox.Builder().color(0.035f, 0.035f, 0.035f, 1.0f).build(engine));
         //scene.setSkybox(new Skybox.Builder().color(1f, 0f, 1f, 1f).build(engine));
-        scene.setSkybox(new Skybox.Builder().color(0f, 0f, 0f, 1f).build(engine));
+        scene.setSkybox(new Skybox.Builder().color(1f, 1f, 1f, 0.3f).build(engine));
 
         view.setCamera(camera);
         view.setScene(scene);
@@ -157,7 +167,7 @@ public class FilamentApp {
         // renderable inicial — count=0, AABB não-vazio minúsculo para evitar crash
         renderablePlano = EntityManager.get().create();
         new RenderableManager.Builder(1)
-                .boundingBox(new Box(0f, 0f, 0f, 10000f, 10000f, 10000f))
+                .boundingBox(new Box(0f, 0f, 0f, 1000000f, 1000000f, 1000000f))
                 .geometry(0, RenderableManager.PrimitiveType.TRIANGLES,
                         dyn2.getVertexBuffer(), dyn2.getIndexBuffer(), 0, dyn2.getIndexCount())
                 .material(0, materialInstance)
@@ -170,7 +180,7 @@ public class FilamentApp {
         // exposição e câmera
         camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f);
         //camera.lookAt(0.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-        camera.lookAt(0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, 3000.1, 0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, -10.0, 0.0, 1.0, 0.0);
+        camera.lookAt(0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, 8000.1, 0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, -10.0, 0.0, 1.0, 0.0);
 
         // animação de rotação
         animator.setInterpolator(new LinearInterpolator());
@@ -195,6 +205,57 @@ public class FilamentApp {
     }
 
     // ——— ciclo de vida de surface / render ———
+    private ValueAnimator cameraAnimator = null;
+
+    private double[] ultimoEye = null;
+    private double[] ultimoCenter = null;
+
+    public void atualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
+        double z = 250;
+
+        double distancia = CalculoVetor.distance2D(posXYant, posXYatual);
+
+        double[] proxEyetmp = posXYant.clone();
+        proxEyetmp[2] = proxEyetmp[2] + distancia;
+
+
+        double[] normal = CalculoVetor.unitDirection2D(posXYatual, proxEyetmp);
+
+        normal = CalculoVetor.raiseXYUnitVector(normal, 45);
+
+        double[] proxEye = CalculoVetor.advanceAlong(posXYatual, normal, z);
+
+        if (ultimoEye == null) {
+            ultimoEye = proxEye;
+            ultimoCenter = posXYatual.clone();
+            return;
+        }
+
+
+
+        double[] eyeAnt = ultimoEye.clone();
+        double[] eyeDepois = proxEye.clone();
+
+        double[] centerAnt = ultimoCenter.clone();
+        double[] centerDepois = posXYatual.clone();
+
+        this.ultimoCenter = centerDepois.clone();
+        this.ultimoEye = eyeDepois.clone();
+        if (cameraAnimator == null || !cameraAnimator.isRunning()) {
+
+            this.cameraAnimator = ValueAnimator.ofFloat(0f, 1f);
+            CameraAnimator.startEngineAnimator(
+                    cameraAnimator,
+                    engineHandler,
+                    eyeAnt,
+                    eyeDepois,
+                    centerAnt,
+                    centerDepois,
+                    MainActivity5.sleep - 20,
+                    camera);
+        }
+
+    }
 
     public void onSurfaceAvailable(Surface surface) {
         runOnEngine(() -> {
@@ -221,7 +282,12 @@ public class FilamentApp {
         runOnEngine(() -> {
 
             double aspect = (double) width / (double) height;
-            camera.setProjection(45.0, aspect, 0.1, 100.0, Camera.Fov.VERTICAL);
+
+            double vfov = 55.0;             // mais “GoPro”, mais cenário, mais distorção
+            double near = 0.2;
+            double far  = 300.0;
+            camera.setProjection(vfov, aspect, near, far, Camera.Fov.VERTICAL);
+
             view.setViewport(new Viewport(0, 0, width, height));
         });
     }
@@ -277,9 +343,9 @@ public class FilamentApp {
 
     // ——— API dinâmica ———
 
-    public void addTriangles(List<double[]> tris, int dynNumber) {
+    public void addTriangles(List<double[]> tris, int dynNumber, double[] cor) {
       runOnEngine(() -> {
-          executeAddTriangles(tris, dynNumber);
+          executeAddTriangles(tris, dynNumber, cor);
       });
 
 
@@ -290,17 +356,15 @@ public class FilamentApp {
      * Acrescenta triângulos e atualiza a geometria/AABB.
      * Chame SEMPRE na thread do Engine (geralmente UI) e FORA de beginFrame..endFrame.
      */
-    private void executeAddTriangles(List<double[]> tris, int dynNumber) {
+    private void executeAddTriangles(List<double[]> tris, int dynNumber, double[] cor) {
+
         DynamicTriangleMesh dyn = dynNumber   == 0 ? this.dyn : this.dyn2;
         int renderable = dynNumber == 0 ? this.renderable : this.renderablePlano;
         if (tris == null || tris.isEmpty()) return;
 
+        dyn.setCurrentColorSrgb((float)cor[0], (float)cor[1], (float)cor[2], (float)cor[3]);
         // 1) escreve em buffers de CPU
-        if (new Random().nextBoolean()) {
-            dyn.setCurrentColorSrgb(1.0f, 0.5f, 0.0f, 1f);
-        } else {
-            dyn.setCurrentColorSrgb(0.0f, 0.5f, 0.0f, 1f);
-        }
+
         dyn.addTriangles(tris);
         // 2) sobe prefixo válido para GPU
         dyn.upload(engine);

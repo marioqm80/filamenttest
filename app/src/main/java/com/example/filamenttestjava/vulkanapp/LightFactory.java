@@ -11,7 +11,7 @@ public class LightFactory {
 
     /** Cria um “sol”: luz direcional ~5500K, 110k lux, sombras ON. */
     public static int createSun(Engine engine, Scene scene) {
-        float[] eye    = { 0f, 3f, 4f };   // posição (primeiro triplo do lookAt)
+        float[] eye    = { 0f, 0f, 4f };   // posição (primeiro triplo do lookAt)
         float[] center = { 0f, 0f, 0f };   // alvo     (segundo triplo do lookAt)
 
 // forward = center - eye (normalizado)

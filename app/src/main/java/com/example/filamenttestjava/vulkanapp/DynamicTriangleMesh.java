@@ -14,55 +14,58 @@ import java.util.List;
 
 /**
  * Malha dinâmica de triângulos para materiais "lit" com cor por vértice (RGBA).
- * Layout do vértice: POSITION(float3) + TANGENTS(quat float4) + COLOR(UBYTE4 normalizado).
+ * Vértice: POSITION(float3) + TANGENTS(quat float4) + COLOR(UBYTE4 normalizado).
+ * Agora usando índices de 32 bits (UINT) para suportar > 65535 vértices.
  */
 public class DynamicTriangleMesh {
 
     // --- layout ---
     private static final int FLOAT_SIZE = 4;
-    // 3*4 (pos) + 4*4 (quat) + 4*1 (rgba) = 32 bytes
+    // 3*4 (pos) + 4*4 (quat) + 4*1 (rgba) = 32 bytes por vértice
     private static final int STRIDE = (3 + 4) * FLOAT_SIZE + 4;
 
-    // --- engine & buffers ---
-
+    // --- capacidade ---
     private final int maxTriangles;
     private final int maxVertices;
     private final int maxIndices;
 
-    private  VertexBuffer vb;
-    private  IndexBuffer ib;
+    // GPU buffers
+    private VertexBuffer vb;
+    private IndexBuffer ib;
 
-    // CPU-side shadows
-    private final ByteBuffer vertexShadow;
-    private final ByteBuffer indexShadow; // USHORT
+    // Sombras CPU
+    private final ByteBuffer vertexShadow; // interleaved
+    private final ByteBuffer indexShadow;  // *** UINT agora (4 bytes por índice) ***
 
-    // contadores atuais (prefixo válido)
+    // contadores atuais
     private int triCount = 0;
     private int vertexCount = 0;
     private int indexCount = 0;
 
-    // AABB acumulado do conteúdo
+    // AABB acumulado
     private float minX = +Float.MAX_VALUE, minY = +Float.MAX_VALUE, minZ = +Float.MAX_VALUE;
     private float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
 
-    // cor atual (aplicada aos próximos vértices/triângulos) - UBYTE [0..255]
+    // cor atual (UBYTE [0..255])
     private byte cr = (byte)255, cg = (byte)255, cb = (byte)255, ca = (byte)255;
 
-    public DynamicTriangleMesh( int maxTriangles) {
+    public DynamicTriangleMesh(int maxTriangles) {
         if (maxTriangles <= 0) throw new IllegalArgumentException("maxTriangles must be > 0");
 
         this.maxTriangles = maxTriangles;
         this.maxVertices  = maxTriangles * 3;
         this.maxIndices   = maxTriangles * 3;
 
-        if (maxVertices > 65535) {
-            throw new IllegalArgumentException("maxTriangles*3 > 65535. Use IndexType.UINT se precisar de mais.");
-        }
+        // *** Removido o check de 65535. Vamos usar índices de 32 bits. ***
 
-        vertexShadow = ByteBuffer.allocateDirect(maxVertices * STRIDE).order(ByteOrder.nativeOrder());
-        indexShadow  = ByteBuffer.allocateDirect(maxIndices * 2).order(ByteOrder.nativeOrder());
+        vertexShadow = ByteBuffer
+                .allocateDirect(maxVertices * STRIDE)
+                .order(ByteOrder.nativeOrder());
 
-
+        // *** Cada índice agora ocupa 4 bytes (UINT) ***
+        indexShadow  = ByteBuffer
+                .allocateDirect(maxIndices * 4)
+                .order(ByteOrder.nativeOrder());
     }
 
     public void inicializaBuffers(Engine engine) {
@@ -78,9 +81,10 @@ public class DynamicTriangleMesh {
                 .normalized(VertexBuffer.VertexAttribute.COLOR)
                 .build(engine);
 
+        // *** Tipo UINT aqui ***
         ib = new IndexBuffer.Builder()
                 .indexCount(maxIndices)
-                .bufferType(IndexBuffer.Builder.IndexType.USHORT)
+                .bufferType(IndexBuffer.Builder.IndexType.UINT)
                 .build(engine);
     }
 
@@ -103,12 +107,9 @@ public class DynamicTriangleMesh {
         ca = (byte) clampU8(a);
     }
 
-
-
     /**
      * Cada item da lista é um triângulo double[9] = x0,y0,z0,x1,y1,z1,x2,y2,z2 (CCW).
      * A cor usada será a "current color" no momento da chamada.
-     * Gera tangente/bitangente a partir da normal da face.
      */
     public void addTriangles(List<double[]> tris) {
         if (tris == null || tris.isEmpty()) return;
@@ -147,11 +148,11 @@ public class DynamicTriangleMesh {
             putV(x1,y1,z1,q);
             putV(x2,y2,z2,q);
 
-            // índices
-            short base = (short) vertexCount;
-            indexShadow.putShort(base);
-            indexShadow.putShort((short)(base+1));
-            indexShadow.putShort((short)(base+2));
+            // índices (agora INT, não SHORT)
+            int base = vertexCount;
+            indexShadow.putInt(base);
+            indexShadow.putInt(base + 1);
+            indexShadow.putInt(base + 2);
 
             vertexCount += 3;
             indexCount  += 3;
@@ -169,18 +170,19 @@ public class DynamicTriangleMesh {
 
     /** Sobe o prefixo válido para GPU (VB e IB). */
     public void upload(Engine engine) {
+        // VB
         ByteBuffer v = vertexShadow.duplicate().order(ByteOrder.nativeOrder());
         v.position(0); v.limit(vertexCount * STRIDE);
         vb.setBufferAt(engine, 0, v.slice().order(ByteOrder.nativeOrder()));
 
+        // IB (*** 4 bytes por índice ***)
         ByteBuffer i = indexShadow.duplicate().order(ByteOrder.nativeOrder());
-        i.position(0); i.limit(indexCount * 2);
+        i.position(0); i.limit(indexCount * 4);
         ib.setBuffer(engine, i.slice().order(ByteOrder.nativeOrder()));
     }
 
     /**
-     * Atualiza a geometria de um renderable existente usando reflexão para setGeometryAt.
-     * Requer uma AAR do Filament que exponha esse método — caso contrário, lança UnsupportedOperationException.
+     * Atualiza a geometria do renderable existente (usa reflexão para setGeometryAt).
      */
     public void applyToRenderable(RenderableManager rm, int renderableEntity)
             throws UnsupportedOperationException {
@@ -202,10 +204,7 @@ public class DynamicTriangleMesh {
         }
     }
 
-    /**
-     * Atualiza o AABB do renderable (tenta várias assinaturas via reflexão).
-     * Se nada existir, desliga culling como fallback.
-     */
+    /** Atualiza o AABB do renderable (tenta várias assinaturas via reflexão). */
     public void updateBoundingBox(RenderableManager rm, int entity) {
         int inst = rm.getInstance(entity);
         final float eps = 1e-4f;
@@ -227,8 +226,7 @@ public class DynamicTriangleMesh {
         if (trySetAabbFloats(rm, "setBoundingBox",            inst, cx,cy,cz,hx,hy,hz)) return;
         if (trySetAabbBox   (rm, "setBoundingBox",            inst, cx,cy,cz,hx,hy,hz)) return;
 
-        // fallback: sem API para AABB -> desliga culling do objeto
-        try {
+        try { // fallback: desliga culling
             Method cull = rm.getClass().getMethod("setCulling", int.class, boolean.class);
             cull.invoke(rm, inst, false);
         } catch (Throwable ignored) {}
