@@ -14,8 +14,8 @@ import java.util.List;
 
 /**
  * Malha dinâmica de triângulos para materiais "lit" com cor por vértice (RGBA).
- * Vértice: POSITION(float3) + TANGENTS(quat float4) + COLOR(UBYTE4 normalizado).
- * Agora usando índices de 32 bits (UINT) para suportar > 65535 vértices.
+ * Vértice: POSITION(float3) + TANGENTS(quat float4) + COLOR(UBYTE4 normalizado) = 32 bytes.
+ * Usa índices de 32 bits (UINT) e ring buffer: quando atinge maxTriangles, sobrescreve os mais antigos.
  */
 public class DynamicTriangleMesh {
 
@@ -35,14 +35,21 @@ public class DynamicTriangleMesh {
 
     // Sombras CPU
     private final ByteBuffer vertexShadow; // interleaved
-    private final ByteBuffer indexShadow;  // *** UINT agora (4 bytes por índice) ***
+    private final ByteBuffer indexShadow;  // UINT (4 bytes por índice)
 
-    // contadores atuais
+    // contadores "visíveis"
     private int triCount = 0;
     private int vertexCount = 0;
     private int indexCount = 0;
 
-    // AABB acumulado
+    // ring buffer / estado
+    private int writeTri = 0;        // próximo slot de triângulo [0..maxTriangles-1]
+    private int filledTris = 0;      // quantos triângulos válidos (<= maxTriangles)
+    private boolean wrapped = false; // já deu a volta pelo menos uma vez?
+    private boolean indicesDirty = true;
+    private boolean aabbDirty = true;
+
+    // AABB acumulado do conteúdo atual (recomputado quando necessário)
     private float minX = +Float.MAX_VALUE, minY = +Float.MAX_VALUE, minZ = +Float.MAX_VALUE;
     private float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
 
@@ -56,13 +63,11 @@ public class DynamicTriangleMesh {
         this.maxVertices  = maxTriangles * 3;
         this.maxIndices   = maxTriangles * 3;
 
-        // *** Removido o check de 65535. Vamos usar índices de 32 bits. ***
-
         vertexShadow = ByteBuffer
                 .allocateDirect(maxVertices * STRIDE)
                 .order(ByteOrder.nativeOrder());
 
-        // *** Cada índice agora ocupa 4 bytes (UINT) ***
+        // Cada índice ocupa 4 bytes (UINT)
         indexShadow  = ByteBuffer
                 .allocateDirect(maxIndices * 4)
                 .order(ByteOrder.nativeOrder());
@@ -81,7 +86,6 @@ public class DynamicTriangleMesh {
                 .normalized(VertexBuffer.VertexAttribute.COLOR)
                 .build(engine);
 
-        // *** Tipo UINT aqui ***
         ib = new IndexBuffer.Builder()
                 .indexCount(maxIndices)
                 .bufferType(IndexBuffer.Builder.IndexType.UINT)
@@ -110,12 +114,10 @@ public class DynamicTriangleMesh {
     /**
      * Cada item da lista é um triângulo double[9] = x0,y0,z0,x1,y1,z1,x2,y2,z2 (CCW).
      * A cor usada será a "current color" no momento da chamada.
+     * Ring buffer: ao atingir maxTriangles, sobrescreve o triângulo mais antigo.
      */
     public void addTriangles(List<double[]> tris) {
         if (tris == null || tris.isEmpty()) return;
-        if (triCount + tris.size() > maxTriangles) {
-            throw new IllegalStateException("Capacidade excedida: " + (triCount + tris.size()) + " > " + maxTriangles);
-        }
 
         for (double[] t : tris) {
             if (t == null || t.length != 9)
@@ -143,41 +145,56 @@ public class DynamicTriangleMesh {
             float[] q = new float[4];
             MathUtils.packTangentFrame(T[0],T[1],T[2], B[0],B[1],B[2], nx,ny,nz, q);
 
-            // 3 vértices com mesma cor atual
-            putV(x0,y0,z0,q);
-            putV(x1,y1,z1,q);
-            putV(x2,y2,z2,q);
+            // slot de triângulo no ring buffer
+            int triSlot = writeTri;            // [0..maxTriangles-1]
+            int baseV   = triSlot * 3;         // 3 vértices por tri
 
-            // índices (agora INT, não SHORT)
-            int base = vertexCount;
-            indexShadow.putInt(base);
-            indexShadow.putInt(base + 1);
-            indexShadow.putInt(base + 2);
+            // escreve os 3 vértices nos offsets corretos do VB shadow
+            writeVertexAt(baseV,     x0,y0,z0, q);
+            writeVertexAt(baseV + 1, x1,y1,z1, q);
+            writeVertexAt(baseV + 2, x2,y2,z2, q);
 
-            vertexCount += 3;
-            indexCount  += 3;
-            triCount    += 1;
-
-            // AABB
-            minX = Math.min(minX, Math.min(x0, Math.min(x1, x2)));
-            minY = Math.min(minY, Math.min(y0, Math.min(y1, y2)));
-            minZ = Math.min(minZ, Math.min(z0, Math.min(z1, z2)));
-            maxX = Math.max(maxX, Math.max(x0, Math.max(x1, x2)));
-            maxY = Math.max(maxY, Math.max(y0, Math.max(y1, y2)));
-            maxZ = Math.max(maxZ, Math.max(z0, Math.max(z1, z2)));
+            // avança o ring
+            writeTri = (writeTri + 1) % maxTriangles;
+            if (filledTris < maxTriangles) {
+                filledTris++;
+            } else {
+                wrapped = true; // começamos a sobrescrever antigos
+            }
         }
+
+        // counts lógicos (o VB pode conter dados fora da janela, mas desenhamos só filledTris)
+        triCount    = filledTris;
+        vertexCount = triCount * 3;
+        indexCount  = triCount * 3;
+
+        // índices e AABB precisam ser reconstituídos para refletir a janela atual
+        indicesDirty = true;
+        aabbDirty    = true;
     }
 
-    /** Sobe o prefixo válido para GPU (VB e IB). */
+    /** Sobe o prefixo válido para GPU (VB e IB). Chamar na thread do Engine e fora de begin/endFrame. */
     public void upload(Engine engine) {
-        // VB
+        // (1) Índices em ordem cronológica (mais antigo -> mais novo)
+        if (indicesDirty) rebuildIndices();
+
+        // (2) AABB (para usar em updateBoundingBox() depois)
+        if (aabbDirty) recomputeAabb();
+
+        // (3) Envia VB:
+        //  - antes de “wrap”: vértices usados são contíguos [0..vertexCount)
+        //  - após “wrap”: os índices podem apontar para slots altos -> envie o buffer inteiro
         ByteBuffer v = vertexShadow.duplicate().order(ByteOrder.nativeOrder());
-        v.position(0); v.limit(vertexCount * STRIDE);
+        if (!wrapped) {
+            v.position(0); v.limit(Math.max(0, vertexCount) * STRIDE);
+        } else {
+            v.position(0); v.limit(maxVertices * STRIDE);
+        }
         vb.setBufferAt(engine, 0, v.slice().order(ByteOrder.nativeOrder()));
 
-        // IB (*** 4 bytes por índice ***)
+        // (4) Envia IB (sempre o prefixo vigente; 4 bytes por índice)
         ByteBuffer i = indexShadow.duplicate().order(ByteOrder.nativeOrder());
-        i.position(0); i.limit(indexCount * 4);
+        i.position(0); i.limit(Math.max(0, indexCount) * 4);
         ib.setBuffer(engine, i.slice().order(ByteOrder.nativeOrder()));
     }
 
@@ -192,8 +209,8 @@ public class DynamicTriangleMesh {
                     "setGeometryAt",
                     int.class, int.class,
                     RenderableManager.PrimitiveType.class,
-                    com.google.android.filament.VertexBuffer.class,
-                    com.google.android.filament.IndexBuffer.class,
+                    VertexBuffer.class,
+                    IndexBuffer.class,
                     int.class, int.class
             );
             m.invoke(rm, inst, 0,
@@ -232,7 +249,79 @@ public class DynamicTriangleMesh {
         } catch (Throwable ignored) {}
     }
 
-    // --- helpers privados ---
+    // --------------------
+    // Helpers privados
+    // --------------------
+
+    private void writeVertexAt(int vertexIndex, float x, float y, float z, float[] q) {
+        final int posBytes = vertexIndex * STRIDE;
+        int oldPos = vertexShadow.position();
+        vertexShadow.position(posBytes);
+        vertexShadow.putFloat(x);
+        vertexShadow.putFloat(y);
+        vertexShadow.putFloat(z);
+        vertexShadow.putFloat(q[0]);
+        vertexShadow.putFloat(q[1]);
+        vertexShadow.putFloat(q[2]);
+        vertexShadow.putFloat(q[3]);
+        vertexShadow.put(cr);
+        vertexShadow.put(cg);
+        vertexShadow.put(cb);
+        vertexShadow.put(ca);
+        vertexShadow.position(oldPos);
+    }
+
+    private void rebuildIndices() {
+        indexShadow.clear();
+        if (filledTris == 0) {
+            indexCount = 0;
+            indicesDirty = false;
+            return;
+        }
+        // ordem cronológica: do mais antigo -> mais novo
+        int start = wrapped ? writeTri : 0;
+        for (int k = 0; k < filledTris; k++) {
+            int tri = (start + k) % maxTriangles;
+            int base = tri * 3;
+            indexShadow.putInt(base);
+            indexShadow.putInt(base + 1);
+            indexShadow.putInt(base + 2);
+        }
+        indexCount = filledTris * 3;
+        indexShadow.flip();
+        indicesDirty = false;
+    }
+
+    // Recalcula AABB varrendo somente a janela ativa do ring buffer
+    private void recomputeAabb() {
+        final float INF = Float.MAX_VALUE;
+        float mnx = +INF, mny = +INF, mnz = +INF;
+        float mxx = -INF, mxy = -INF, mxz = -INF;
+
+        if (filledTris == 0) {
+            minX = minY = minZ = +INF;
+            maxX = maxY = maxZ = -INF;
+            aabbDirty = false;
+            return;
+        }
+
+        int start = wrapped ? writeTri : 0;
+        for (int k = 0; k < filledTris; k++) {
+            int tri = (start + k) % maxTriangles;
+            for (int v = 0; v < 3; v++) {
+                int vi = tri * 3 + v;
+                int off = vi * STRIDE;
+                float x = vertexShadow.getFloat(off);
+                float y = vertexShadow.getFloat(off + 4);
+                float z = vertexShadow.getFloat(off + 8);
+                if (x < mnx) mnx = x; if (y < mny) mny = y; if (z < mnz) mnz = z;
+                if (x > mxx) mxx = x; if (y > mxy) mxy = y; if (z > mxz) mxz = z;
+            }
+        }
+        minX = mnx; minY = mny; minZ = mnz;
+        maxX = mxx; maxY = mxy; maxZ = mxz;
+        aabbDirty = false;
+    }
 
     private static boolean trySetAabbFloats(RenderableManager rm, String method,
                                             int inst, float cx,float cy,float cz,float hx,float hy,float hz) {
@@ -281,6 +370,8 @@ public class DynamicTriangleMesh {
         B[0]=bx; B[1]=by; B[2]=bz;
     }
 
+    // (não usado na versão ring, mantido por compatibilidade)
+    @SuppressWarnings("unused")
     private void putV(float x,float y,float z,float[] q) {
         vertexShadow.putFloat(x);
         vertexShadow.putFloat(y);
@@ -289,7 +380,6 @@ public class DynamicTriangleMesh {
         vertexShadow.putFloat(q[1]);
         vertexShadow.putFloat(q[2]);
         vertexShadow.putFloat(q[3]);
-        // COLOR (UBYTE4)
         vertexShadow.put(cr);
         vertexShadow.put(cg);
         vertexShadow.put(cb);

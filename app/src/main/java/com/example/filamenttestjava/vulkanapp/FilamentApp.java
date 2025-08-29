@@ -31,6 +31,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
+import io.reactivex.rxjava3.core.BackpressureStrategy;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.subjects.PublishSubject;
+import io.reactivex.rxjava3.subjects.Subject;
+
 public class FilamentApp {
 
     private final Context context;
@@ -68,10 +73,17 @@ public class FilamentApp {
     private final ValueAnimator animatorPlano = ValueAnimator.ofFloat(0f, 360f);
 
     /** Construtor padrão (capacidade “ok” para crescer). */
-    public FilamentApp(Context ctx) { this(ctx, 1200000); }
+    public FilamentApp(Context ctx) { this(ctx, 300000); }
 
     /** Construtor com capacidade máxima de triângulos. */
     public FilamentApp(Context ctx, int maxTriangles) {
+        pedeAtualizarTela.toFlowable(BackpressureStrategy.LATEST)
+                .observeOn(Schedulers.io(), false, 1)
+                .subscribe(t -> {
+                    List<double[]> antesDepois = (List<double[]>) t;
+                    executaAtualizaNovaPosicaoCamera(antesDepois.get(0), antesDepois.get(1));
+                });
+
         filamentThread = new HandlerThread("FilamentThread");
         filamentThread.start();
         engineHandler = new Handler(filamentThread.getLooper());
@@ -205,12 +217,25 @@ public class FilamentApp {
     }
 
     // ——— ciclo de vida de surface / render ———
-    private ValueAnimator cameraAnimator = null;
+    private volatile ValueAnimator cameraAnimator = null;
 
     private double[] ultimoEye = null;
     private double[] ultimoCenter = null;
 
-    public void atualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
+    private PublishSubject pedeAtualizarTela = PublishSubject.create();
+
+
+    public synchronized void atualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
+
+        pedeAtualizarTela.onNext(Arrays.asList(posXYant, posXYatual));
+
+    }
+    public synchronized void executaAtualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
+        System.out.println("vai atualizar nova posicao");
+        if (cameraAnimator != null && cameraAnimator.isRunning()) {
+
+            return;
+        }
         double z = 250;
 
         double distancia = CalculoVetor.distance2D(posXYant, posXYatual);
@@ -239,8 +264,9 @@ public class FilamentApp {
         double[] centerAnt = ultimoCenter.clone();
         double[] centerDepois = posXYatual.clone();
 
-        this.ultimoCenter = centerDepois.clone();
-        this.ultimoEye = eyeDepois.clone();
+
+
+
         if (cameraAnimator == null || !cameraAnimator.isRunning()) {
 
             this.cameraAnimator = ValueAnimator.ofFloat(0f, 1f);
@@ -251,9 +277,21 @@ public class FilamentApp {
                     eyeDepois,
                     centerAnt,
                     centerDepois,
-                    MainActivity5.sleep - 20,
+                    //(float) (MainActivity5.sleep*4) /2,
+                    2000f,
                     camera);
+            this.ultimoCenter = centerDepois.clone();
+            this.ultimoEye = eyeDepois.clone();
         }
+        while (cameraAnimator.isRunning()) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+
+            }
+        }
+
+        System.out.println("concluiu vai atualizar nova posicao");
 
     }
 

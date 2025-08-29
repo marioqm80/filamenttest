@@ -4,6 +4,8 @@ import android.animation.ValueAnimator;
 import android.os.Handler;
 import android.view.animation.LinearInterpolator;
 
+import androidx.dynamicanimation.animation.DynamicAnimation;
+
 import com.google.android.filament.Camera;
 
 public class CameraAnimator {
@@ -16,10 +18,16 @@ public class CameraAnimator {
                                     Camera camera) {
 
 
-
-
             engineAnimator.setDuration((long) durMs);
             engineAnimator.setInterpolator(new LinearInterpolator());
+        engineAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationStart(android.animation.Animator animation) {
+                System.out.println("animação start ");
+            }
+            @Override public void onAnimationEnd(android.animation.Animator animation)   {
+                System.out.println("animação end ");
+            }
+        });
             engineAnimator.addUpdateListener(a -> {
                 float t = (float) a.getAnimatedValue();
 
@@ -32,14 +40,13 @@ public class CameraAnimator {
                 double cz = lerp(fromCenter[2], toCenter[2], t);
 
                 // mesma thread do Engine
-                engineHandler.post(() -> {
+                //engineHandler.post(() -> {
 
                     camera.lookAt(ex, ey, ez, cx, cy, cz, 0f, 0f, 1f);
-                });
+                //});
             });
-        engineHandler.post(() -> {
-            engineAnimator.start(); // inicia NA thread do engine
-        });
+        // inicia NA thread do engine
+        engineHandler.post(engineAnimator::start);
     }
 
 

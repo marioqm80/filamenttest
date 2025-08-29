@@ -3,10 +3,12 @@ package com.example.filamenttestjava;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.view.Choreographer;
 import android.view.Surface;
 import android.view.SurfaceView;
+import android.view.WindowManager;
 
 import com.example.filamenttestjava.utils.AssetLinePublisher;
 import com.example.filamenttestjava.utils.CalculoDistancias;
@@ -55,11 +57,18 @@ public class MainActivity5 extends Activity {
 
     private final PublishSubject<double[]> altitudeGpsPublisher = PublishSubject.create();
 
-    public static final long sleep = 30;
+    public static final long sleep = 300;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        //Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
+        //Handler currentHandler = new Handler(looper);
+
+        HandlerThread  ht= new HandlerThread("MarioFilamentThread");
+        ht.start();
+        Handler currentHandler = new Handler(ht.getLooper());
 
         publisher.lines()
                 .filter(l -> l != null && l.startsWith("B"))
@@ -110,6 +119,44 @@ public class MainActivity5 extends Activity {
                     }
                 });
 
+        currentHandler.postDelayed(() -> {
+
+            pixelModeloSubject
+                    .subscribeOn(Schedulers.io())
+                    .buffer(2, 1)
+                    .filter(list -> list.size() == 2)
+                    .subscribe( listaModelo -> {
+                        double[] modelo = listaModelo.get(1);
+                        //app.atualizaNovaPosicaoCamera(modelo);
+                        float[] eyeTo = new float[] {(float) modelo[0], (float) modelo[0], 100};
+                        float[] centerTo = new float[] {(float) modelo[0], (float) modelo[0], (float) modelo[0]};
+
+                    });
+        }, 0);
+
+        currentHandler.postDelayed(() -> {
+            pixelModeloSubject
+                    .subscribeOn(Schedulers.io())
+                    .buffer(2, 1)
+                    .filter(list -> list.size() == 2)
+                    .subscribe( listaModelo -> {
+
+                        double maxVarioCor = 5;
+                        double vario = listaModelo.get(1)[2] - listaModelo.get(0)[2];
+                        double[] corVario2 = CorUtil.getCorVarioErico(false, 255, vario, -3d, maxVarioCor, 0d, maxVarioCor / 3f, (maxVarioCor * 2f) / 3f);
+
+                        final List<double[]> cube2 = Geometry.makeCylinderTris(listaModelo.get(0), listaModelo.get(1), 4, 15, 15, true);
+                        System.out.println("vai adicionar triangulo: ");
+                        app.addTriangles(cube2, 1, corVario2);
+                        System.out.println("concluiu vai adicionar triangulo: ");
+
+
+                        app.atualizaNovaPosicaoCamera(listaModelo.get(0), listaModelo.get(1));
+
+
+                    });
+        }, 0);
+
 
 
         surfaceView = new SurfaceView(this);
@@ -144,8 +191,7 @@ public class MainActivity5 extends Activity {
         });
         uiHelper.attachTo(surfaceView);
 
-        Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
-        Handler currentHandler = new Handler(looper);
+
         // <= AQUI: popular a malha dinâmica antes de renderizar
 
 
@@ -153,41 +199,7 @@ public class MainActivity5 extends Activity {
 
 
 
-        currentHandler.postDelayed(() -> {
 
-            pixelModeloSubject
-                    .subscribeOn(Schedulers.io())
-                    .buffer(2, 1)
-                    .filter(list -> list.size() == 2)
-                    .subscribe( listaModelo -> {
-                        double[] modelo = listaModelo.get(1);
-                        //app.atualizaNovaPosicaoCamera(modelo);
-                        float[] eyeTo = new float[] {(float) modelo[0], (float) modelo[0], 100};
-                        float[] centerTo = new float[] {(float) modelo[0], (float) modelo[0], (float) modelo[0]};
-                        app.atualizaNovaPosicaoCamera(listaModelo.get(0), listaModelo.get(1));
-                    });
-        }, 0);
-
-        currentHandler.postDelayed(() -> {
-        pixelModeloSubject
-                .subscribeOn(Schedulers.io())
-                .buffer(2, 1)
-                .filter(list -> list.size() == 2)
-                .subscribe( listaModelo -> {
-
-                    double maxVarioCor = 5;
-
-
-                    double vario = listaModelo.get(1)[2] - listaModelo.get(0)[2];
-                    double[] corVario2 = CorUtil.getCorVarioErico(false, 255, vario, -3d, maxVarioCor, 0d, maxVarioCor / 3f, (maxVarioCor * 2f) / 3f);
-
-
-
-                    final List<double[]> cube2 = Geometry.makeCylinderTris(listaModelo.get(0), listaModelo.get(1), 2, 15, 15, true);
-                    app.addTriangles(cube2, 1, corVario2);
-
-                });
-    }, 0);
 
 
     }
@@ -195,6 +207,7 @@ public class MainActivity5 extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         app.start(); // animação etc.
         choreographer.postFrameCallback(frameCallback);
     }
@@ -202,6 +215,7 @@ public class MainActivity5 extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         choreographer.removeFrameCallback(frameCallback);
         app.stop();
     }

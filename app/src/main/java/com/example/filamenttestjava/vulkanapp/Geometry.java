@@ -248,7 +248,7 @@ public final class Geometry {
         // eixo do cilindro
         double[] axis = sub(topCenter, baseCenter);
         double  axisLen = Math.sqrt(dot(axis, axis));
-        if (axisLen == 0) throw new IllegalArgumentException("C0 e C1 coincidem");
+        //if (axisLen == 0) throw new IllegalArgumentException("C0 e C1 coincidem");
         double[] N = mul(axis, 1.0 / axisLen); // normalizado
 
         // base ortonormal (U,V,N) com U×V = N

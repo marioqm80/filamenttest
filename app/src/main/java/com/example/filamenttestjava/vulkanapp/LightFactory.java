@@ -30,9 +30,9 @@ public class LightFactory {
         LightManager.Builder b = new LightManager.Builder(LightManager.Type.DIRECTIONAL)
                 .color(rgb[0], rgb[1], rgb[2])
                 .intensity(110_000.0f)
-                .direction(0.0f, -0.5f, -0.5f)
+                //.direction(0.0f, -0.5f, -0.5f)
                 //.direction(0.0f, -1.0f, -0.25f)
-                //.direction( dx, dy, dz)
+                .direction( dx, dy, dz)
 
                 .castShadows(true);
 
