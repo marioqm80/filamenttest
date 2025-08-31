@@ -57,7 +57,7 @@ public class MainActivity5 extends Activity {
 
     private final PublishSubject<double[]> altitudeGpsPublisher = PublishSubject.create();
 
-    public static final long sleep = 300;
+    public static final long sleep = 10;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

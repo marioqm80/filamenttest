@@ -1,5 +1,7 @@
 package com.example.filamenttestjava.vulkanapp;
 
+import android.os.Handler;
+
 import com.google.android.filament.Engine;
 import com.google.android.filament.IndexBuffer;
 import com.google.android.filament.MathUtils;
@@ -54,6 +56,9 @@ public class DynamicTriangleMesh {
     // AABB fixo (defina fora desta classe, 1x, no renderable)
     private final float fixedCx, fixedCy, fixedCz;
     private final float fixedHx, fixedHy, fixedHz;
+    private volatile Engine engine;
+
+    private volatile Handler engineHandler;
 
     public DynamicTriangleMesh(int maxTriangles) {
         this(maxTriangles, 0f,0f,0f,
@@ -65,6 +70,8 @@ public class DynamicTriangleMesh {
     public DynamicTriangleMesh(int maxTriangles,
                                float cx, float cy, float cz,
                                float hx, float hy, float hz) {
+        this.engine = null;
+        this.engineHandler = null;
         if (maxTriangles <= 0) throw new IllegalArgumentException("maxTriangles must be > 0");
         this.maxTriangles = maxTriangles;
         this.maxVertices  = maxTriangles * 3;
@@ -84,7 +91,9 @@ public class DynamicTriangleMesh {
         return Math.max(128f, e);
     }
 
-    public void inicializaBuffers(Engine engine) {
+    public void inicializaBuffers(Engine engine, Handler engineHandler) {
+        this.engine = engine;
+        this.engineHandler = engineHandler;
         vb = new VertexBuffer.Builder()
                 .bufferCount(1)
                 .vertexCount(maxVertices)
@@ -182,6 +191,12 @@ public class DynamicTriangleMesh {
             vertexCount = maxVertices;
             indexCount  = maxIndices;
         }
+
+        if (engine != null) {
+            upload(engine);
+        }
+
+        
     }
 
     /** Envia VB; quando ‘wrapped’, enviamos o buffer todo (índices podem apontar para slots altos). */

@@ -152,8 +152,8 @@ public class FilamentApp {
         materialInstance.setParameter("roughness", 0.1f);
 
         dyn2 = new DynamicTriangleMesh(maxTriangles);
-        dyn2.inicializaBuffers(engine);
-        dyn2.upload(engine);
+        dyn2.inicializaBuffers(engine, engineHandler);
+        //dyn2.upload(engine);
 
 
 
@@ -162,8 +162,8 @@ public class FilamentApp {
 
         // malha dinâmica (começa vazia)
         dyn = new DynamicTriangleMesh( maxTriangles);
-        dyn.inicializaBuffers(engine);
-        dyn.upload(engine);
+        dyn.inicializaBuffers(engine, engineHandler);
+        //dyn.upload(engine);
 
 
 
@@ -281,8 +281,8 @@ public class FilamentApp {
                     eyeDepois,
                     centerAnt,
                     centerDepois,
-                    //(float) (MainActivity5.sleep*4) /2,
-                    2000f,
+                    (float) (MainActivity5.sleep) *0.98f,
+
                     camera);
             this.ultimoCenter = centerDepois.clone();
             this.ultimoEye = eyeDepois.clone();
@@ -386,9 +386,9 @@ public class FilamentApp {
     // ——— API dinâmica ———
 
     public void addTriangles(List<double[]> tris, int dynNumber, double[] cor) {
-      runOnEngine(() -> {
+      //runOnEngine(() -> {
           executeAddTriangles(tris, dynNumber, cor);
-      });
+      //});
 
 
 
@@ -409,7 +409,7 @@ public class FilamentApp {
 
         dyn.addTriangles(tris);
         // 2) sobe prefixo válido para GPU
-        dyn.upload(engine);
+        //dyn.upload(engine);
 
         // 3) tenta atualizar o count desenhado sem recriar o renderable
         RenderableManager rm = engine.getRenderableManager();
