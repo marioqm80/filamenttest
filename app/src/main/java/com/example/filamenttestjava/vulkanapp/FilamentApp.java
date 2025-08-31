@@ -159,6 +159,7 @@ public class FilamentApp {
 
 
 
+
         // malha dinâmica (começa vazia)
         dyn = new DynamicTriangleMesh( maxTriangles);
         dyn.inicializaBuffers(engine);
@@ -185,6 +186,9 @@ public class FilamentApp {
                 .material(0, materialInstance)
                 .build(engine, renderablePlano);
         scene.addEntity(renderablePlano);
+
+
+
 
         // sol
         sun = LightFactory.createSun(engine, scene);
