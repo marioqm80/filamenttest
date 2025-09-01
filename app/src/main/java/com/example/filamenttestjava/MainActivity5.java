@@ -192,18 +192,6 @@ public class MainActivity5 extends Activity {
             }
         });
         uiHelper.attachTo(surfaceView);
-
-
-        // <= AQUI: popular a malha dinâmica antes de renderizar
-
-
-
-
-
-
-
-
-
     }
 
     @Override

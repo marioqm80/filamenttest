@@ -1,7 +1,6 @@
 package com.example.filamenttestjava.vulkanapp;
 
 import android.os.Handler;
-import android.os.Looper;
 
 import com.example.filamenttestjava.utils.Concorrencia;
 import com.google.android.filament.Engine;
@@ -15,8 +14,6 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Malha dinâmica de triângulos (Filament "lit") com cor por vértice (RGBA).
@@ -95,9 +92,13 @@ public class DynamicTriangleMesh {
         return Math.max(128f, e);
     }
 
-    public void inicializaBuffers(Engine engine, Handler engineHandler) {
+    public void setEngineHandler(Engine engine, Handler engineHandler) {
         this.engine = engine;
         this.engineHandler = engineHandler;
+    }
+
+    public void inicializaBuffers(Engine engine, Handler engineHandler) {
+        setEngineHandler(engine, engineHandler);
         vb = new VertexBuffer.Builder()
                 .bufferCount(1)
                 .vertexCount(maxVertices)

@@ -58,7 +58,7 @@ public class FilamentApp {
     private final int maxTriangles;
 
 
-    private DynamicTriangleMesh dyn;
+
 
     private DynamicTriangleMesh dyn2;
 
@@ -72,14 +72,14 @@ public class FilamentApp {
 
     Handler calculoAnimacaoHandler;
 
-    private final ValueAnimator animator = ValueAnimator.ofFloat(0f, 360f);
-    private final ValueAnimator animatorPlano = ValueAnimator.ofFloat(0f, 360f);
+
 
     /** Construtor padrão (capacidade “ok” para crescer). */
     public FilamentApp(Context ctx) { this(ctx, 300000); }
 
     /** Construtor com capacidade máxima de triângulos. */
     public FilamentApp(Context ctx, int maxTriangles) {
+        pedeAtualizarTela.serialize();
         pedeAtualizarTela.toFlowable(BackpressureStrategy.LATEST)
                 .observeOn(Schedulers.io(), false, 1)
                 .subscribe(t -> {
@@ -108,7 +108,7 @@ public class FilamentApp {
 
 
     private final android.os.Handler engineHandler;
-    private static final Object monitor = new Object();
+
 
     public void runOnEngine(Runnable r) {
         if (Looper.myLooper() == filamentThread.getLooper()) r.run();
@@ -119,12 +119,7 @@ public class FilamentApp {
 
     private void initEngine() {
 
-
             engine = Engine.create(Engine.Backend.VULKAN); // troque para OPENGL se quiser
-
-
-
-
 
             if (engine == null) throw new RuntimeException("Vulkan não suportado");
 
@@ -157,29 +152,6 @@ public class FilamentApp {
 
         dyn2 = new DynamicTriangleMesh(maxTriangles);
         dyn2.inicializaBuffers(engine, engineHandler);
-        //dyn2.upload(engine);
-
-
-
-
-
-
-        // malha dinâmica (começa vazia)
-        dyn = new DynamicTriangleMesh( maxTriangles);
-        dyn.inicializaBuffers(engine, engineHandler);
-        //dyn.upload(engine);
-
-
-
-        renderable = EntityManager.get().create();
-
-        new RenderableManager.Builder(1)
-                .boundingBox(new Box(0f, 0f, 0f, 1e-3f, 1e-3f, 1e-3f))
-                .geometry(0, RenderableManager.PrimitiveType.TRIANGLES,
-                        dyn.getVertexBuffer(), dyn.getIndexBuffer(), 0, dyn.getIndexCount())
-                .material(0, materialInstance)
-                .build(engine, renderable);
-        scene.addEntity(renderable);
 
         // renderable inicial — count=0, AABB não-vazio minúsculo para evitar crash
         renderablePlano = EntityManager.get().create();
@@ -191,37 +163,13 @@ public class FilamentApp {
                 .build(engine, renderablePlano);
         scene.addEntity(renderablePlano);
 
-
-
-
         // sol
         sun = LightFactory.createSun(engine, scene);
 
         // exposição e câmera
         camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f);
-        //camera.lookAt(0.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-        camera.lookAt(0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, 8000.1, 0.0 + MainActivity5.dxInicial, 0.0 + MainActivity5.dyInicial, -10.0, 0.0, 1.0, 0.0);
 
-        // animação de rotação
-        animator.setInterpolator(new LinearInterpolator());
-        animator.setDuration(2000);
-        animator.setRepeatMode(ValueAnimator.RESTART);
-        animator.setRepeatCount(ValueAnimator.INFINITE);
-        animator.addUpdateListener(a -> {
-            float[] m = new float[16];
-            Matrix.setRotateM(m, 0, (Float) a.getAnimatedValue(), 0.3f, 0.8f, 0.2f);
-            TransformCompat.set(engine, renderable, m);
-        });
 
-        animatorPlano.setInterpolator(new LinearInterpolator());
-        animatorPlano.setDuration(2000);
-        animatorPlano.setRepeatMode(ValueAnimator.RESTART);
-        animatorPlano.setRepeatCount(ValueAnimator.INFINITE);
-        animatorPlano.addUpdateListener(a -> {
-            float[] m = new float[16];
-            Matrix.setRotateM(m, 0, (Float) a.getAnimatedValue(), 0.0f, 0.0f, 0.2f);
-            //TransformCompat.set(engine, renderablePlano, m);
-        });
     }
 
     // ——— ciclo de vida de surface / render ———
@@ -230,7 +178,7 @@ public class FilamentApp {
     private double[] ultimoEye = null;
     private double[] ultimoCenter = null;
 
-    private PublishSubject pedeAtualizarTela = PublishSubject.create();
+    private final PublishSubject<List<double[]>> pedeAtualizarTela = PublishSubject.create();
 
 
     public synchronized void atualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
@@ -241,7 +189,6 @@ public class FilamentApp {
     public synchronized void executaAtualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
         System.out.println("vai atualizar nova posicao");
         if (cameraAnimator != null && cameraAnimator.isRunning()) {
-
             return;
         }
         double z = 250;
@@ -250,7 +197,6 @@ public class FilamentApp {
 
         double[] proxEyetmp = posXYant.clone();
         proxEyetmp[2] = proxEyetmp[2] + distancia;
-
 
         double[] normal = CalculoVetor.unitDirection2D(posXYatual, proxEyetmp);
 
@@ -264,16 +210,11 @@ public class FilamentApp {
             return;
         }
 
-
-
         double[] eyeAnt = ultimoEye.clone();
         double[] eyeDepois = proxEye.clone();
 
         double[] centerAnt = ultimoCenter.clone();
         double[] centerDepois = posXYatual.clone();
-
-
-
 
         if (cameraAnimator == null || !cameraAnimator.isRunning()) {
 
@@ -287,8 +228,6 @@ public class FilamentApp {
                     centerAnt,
                     centerDepois,
                     (float) (MainActivity5.sleep*20) *0.90f,
-                    //4000,
-
                     camera);
             this.ultimoCenter = centerDepois.clone();
             this.ultimoEye = eyeDepois.clone();
@@ -343,18 +282,15 @@ public class FilamentApp {
     public void render(long frameTimeNanos) {
         runOnEngine(() -> {
             if (swapChain == null) return;
-            synchronized (monitor) {
-                if (renderer.beginFrame(swapChain, frameTimeNanos)) {
-                    renderer.render(view);
-                    renderer.endFrame();
-                }
+            if (renderer.beginFrame(swapChain, frameTimeNanos)) {
+                renderer.render(view);
+                renderer.endFrame();
             }
-
         });
     }
 
-    public void start() { animator.start(); animatorPlano.start(); }
-    public void stop()  { animator.cancel(); animatorPlano.cancel();}
+    public void start() {  }
+    public void stop()  { }
 
     public Renderer getRenderer() { return renderer; }
 
@@ -370,9 +306,9 @@ public class FilamentApp {
         engine.destroyEntity(renderable);
 
         // destruir buffers dinâmicos
-        if (dyn != null) {
-            engine.destroyVertexBuffer(dyn.getVertexBuffer());
-            engine.destroyIndexBuffer(dyn.getIndexBuffer());
+        if (dyn2 != null) {
+            engine.destroyVertexBuffer(dyn2.getVertexBuffer());
+            engine.destroyIndexBuffer(dyn2.getIndexBuffer());
         }
 
         engine.destroyMaterialInstance(materialInstance);
@@ -407,7 +343,7 @@ public class FilamentApp {
     private void executeAddTriangles(List<double[]> tris, int dynNumber, double[] cor) {
 
 
-        DynamicTriangleMesh dyn = dynNumber   == 0 ? this.dyn : this.dyn2;
+        DynamicTriangleMesh dyn = this.dyn2;
         int renderable = dynNumber == 0 ? this.renderable : this.renderablePlano;
         if (tris == null || tris.isEmpty()) return;
 
@@ -423,20 +359,7 @@ public class FilamentApp {
         try {
             dyn.applyToRenderable(rm, renderable);
         } catch (UnsupportedOperationException ex) {
-//            // Fallback (versões antigas sem setGeometryAt): recria o renderable
-//            final int old = renderable;
-//            scene.removeEntity(old);
-//            engine.destroyEntity(old);
-//            EntityManager.get().destroy(old);
 //
-//            renderable = EntityManager.get().create();
-//            new RenderableManager.Builder(1)
-//                    .boundingBox(new Box(0f, 0f, 0f, 1e-3f, 1e-3f, 1e-3f))
-//                    .geometry(0, RenderableManager.PrimitiveType.TRIANGLES,
-//                            dyn.getVertexBuffer(), dyn.getIndexBuffer(), 0, dyn.getIndexCount())
-//                    .material(0, materialInstance)
-//                    .build(engine, renderable);
-//            scene.addEntity(renderable);
         }
 
         // 4) atualiza o AABB de acordo com o conteúdo atual
