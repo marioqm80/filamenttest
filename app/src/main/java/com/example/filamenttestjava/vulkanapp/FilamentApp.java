@@ -13,6 +13,7 @@ import com.example.filamenttestjava.MainActivity5;
 
 import com.example.filamenttestjava.utils.CalculoVetor;
 import com.example.filamenttestjava.utils.CameraAnimator;
+import com.example.filamenttestjava.utils.Concorrencia;
 import com.google.android.filament.Box;
 import com.google.android.filament.Camera;
 import com.google.android.filament.Colors;
@@ -69,6 +70,8 @@ public class FilamentApp {
 
     HandlerThread filamentThread;
 
+    Handler calculoAnimacaoHandler;
+
     private final ValueAnimator animator = ValueAnimator.ofFloat(0f, 360f);
     private final ValueAnimator animatorPlano = ValueAnimator.ofFloat(0f, 360f);
 
@@ -86,20 +89,21 @@ public class FilamentApp {
 
         filamentThread = new HandlerThread("FilamentThread");
         filamentThread.start();
+
+        HandlerThread animacaoMotor = new HandlerThread("animacao");
+        animacaoMotor.start();
         engineHandler = new Handler(filamentThread.getLooper());
+        calculoAnimacaoHandler = new Handler(animacaoMotor.getLooper());
 
         this.context = ctx.getApplicationContext();
         this.maxTriangles = maxTriangles;
 
-        runOnEngine(() -> {
+        Concorrencia.postAndWait(engineHandler, () -> {
             initEngine();
             initView();
             initScene();
-
-
-
-
         });
+
     }
 
 
@@ -277,11 +281,13 @@ public class FilamentApp {
             CameraAnimator.startEngineAnimator(
                     cameraAnimator,
                     engineHandler,
+                    calculoAnimacaoHandler,
                     eyeAnt,
                     eyeDepois,
                     centerAnt,
                     centerDepois,
-                    (float) (MainActivity5.sleep) *0.98f,
+                    (float) (MainActivity5.sleep*20) *0.90f,
+                    //4000,
 
                     camera);
             this.ultimoCenter = centerDepois.clone();
@@ -399,6 +405,7 @@ public class FilamentApp {
      * Chame SEMPRE na thread do Engine (geralmente UI) e FORA de beginFrame..endFrame.
      */
     private void executeAddTriangles(List<double[]> tris, int dynNumber, double[] cor) {
+
 
         DynamicTriangleMesh dyn = dynNumber   == 0 ? this.dyn : this.dyn2;
         int renderable = dynNumber == 0 ? this.renderable : this.renderablePlano;

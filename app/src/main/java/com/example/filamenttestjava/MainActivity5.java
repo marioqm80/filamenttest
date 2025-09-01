@@ -57,7 +57,7 @@ public class MainActivity5 extends Activity {
 
     private final PublishSubject<double[]> altitudeGpsPublisher = PublishSubject.create();
 
-    public static final long sleep = 10;
+    public static final long sleep = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +69,8 @@ public class MainActivity5 extends Activity {
         HandlerThread  ht= new HandlerThread("MarioFilamentThread");
         ht.start();
         Handler currentHandler = new Handler(ht.getLooper());
+
+        app = new FilamentApp(this /*context*/);
 
         publisher.lines()
                 .filter(l -> l != null && l.startsWith("B"))
@@ -145,7 +147,7 @@ public class MainActivity5 extends Activity {
                         double vario = listaModelo.get(1)[2] - listaModelo.get(0)[2];
                         double[] corVario2 = CorUtil.getCorVarioErico(false, 255, vario, -3d, maxVarioCor, 0d, maxVarioCor / 3f, (maxVarioCor * 2f) / 3f);
 
-                        final List<double[]> cube2 = Geometry.makeCylinderTris(listaModelo.get(0), listaModelo.get(1), 4, 15, 15, true);
+                        final List<double[]> cube2 = Geometry.makeCylinderTris(listaModelo.get(0), listaModelo.get(1), 4, 8, 8, true);
                         System.out.println("vai adicionar triangulo: ");
                         app.addTriangles(cube2, 1, corVario2);
                         System.out.println("concluiu vai adicionar triangulo: ");
@@ -165,7 +167,7 @@ public class MainActivity5 extends Activity {
         choreographer = Choreographer.getInstance();
         displayHelper = new DisplayHelper(this);
 
-        app = new FilamentApp(this /*context*/);
+
 
         uiHelper = new UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK);
         uiHelper.setRenderCallback(new UiHelper.RendererCallback() {

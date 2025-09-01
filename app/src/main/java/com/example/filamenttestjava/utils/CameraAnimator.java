@@ -11,7 +11,7 @@ import com.google.android.filament.Camera;
 public class CameraAnimator {
 
     // NOVO: anima eye E center
-    public static void startEngineAnimator(ValueAnimator engineAnimator, Handler engineHandler,
+    public static void startEngineAnimator(ValueAnimator engineAnimator, Handler engineHandler, Handler calculoHandler,
                                     double[] fromEye,    double[] toEye,
                                            double[] fromCenter, double[] toCenter,
                                     float durMs,
@@ -42,11 +42,14 @@ public class CameraAnimator {
                 // mesma thread do Engine
                 //engineHandler.post(() -> {
 
+                Concorrencia.postAndWait(engineHandler, () -> {
+
                     camera.lookAt(ex, ey, ez, cx, cy, cz, 0f, 0f, 1f);
+                });
                 //});
             });
         // inicia NA thread do engine
-        engineHandler.post(engineAnimator::start);
+        calculoHandler.post(engineAnimator::start);
     }
 
 

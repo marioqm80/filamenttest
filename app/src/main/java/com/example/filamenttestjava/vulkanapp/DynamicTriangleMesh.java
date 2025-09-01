@@ -1,7 +1,9 @@
 package com.example.filamenttestjava.vulkanapp;
 
 import android.os.Handler;
+import android.os.Looper;
 
+import com.example.filamenttestjava.utils.Concorrencia;
 import com.google.android.filament.Engine;
 import com.google.android.filament.IndexBuffer;
 import com.google.android.filament.MathUtils;
@@ -13,6 +15,8 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Malha dinâmica de triângulos (Filament "lit") com cor por vértice (RGBA).
@@ -115,7 +119,9 @@ public class DynamicTriangleMesh {
         indexShadow.clear();
         for (int i = 0; i < maxIndices; i++) indexShadow.putInt(i);
         indexShadow.flip();
-        ib.setBuffer(engine, indexShadow.duplicate());
+        Concorrencia.postAndWait(engineHandler, () -> {
+            ib.setBuffer(engine, indexShadow.duplicate());
+        });
     }
 
     // getters
@@ -209,28 +215,34 @@ public class DynamicTriangleMesh {
             v.position(0);
             v.limit(maxVertices * STRIDE);
         }
-        vb.setBufferAt(engine, 0, v.slice().order(ByteOrder.nativeOrder()));
+        Concorrencia.postAndWait(engineHandler, () -> {
+
+            vb.setBufferAt(engine, 0, v.slice().order(ByteOrder.nativeOrder()));
+        });
     }
 
     /** Atualiza a geometria do renderable (count varia conforme triCount/indexCount). */
     public void applyToRenderable(RenderableManager rm, int renderableEntity)
             throws UnsupportedOperationException {
-        int inst = rm.getInstance(renderableEntity);
-        try {
-            Method m = rm.getClass().getMethod(
-                    "setGeometryAt",
-                    int.class, int.class,
-                    RenderableManager.PrimitiveType.class,
-                    VertexBuffer.class,
-                    IndexBuffer.class,
-                    int.class, int.class
-            );
-            m.invoke(rm, inst, 0,
-                    RenderableManager.PrimitiveType.TRIANGLES,
-                    this.vb, this.ib, 0, this.indexCount);
-        } catch (Throwable t) {
-            throw new UnsupportedOperationException("setGeometryAt indisponível nesta versão.", t);
-        }
+        Concorrencia.postAndWait(engineHandler, () -> {
+
+            int inst = rm.getInstance(renderableEntity);
+            try {
+                Method m = rm.getClass().getMethod(
+                        "setGeometryAt",
+                        int.class, int.class,
+                        RenderableManager.PrimitiveType.class,
+                        VertexBuffer.class,
+                        IndexBuffer.class,
+                        int.class, int.class
+                );
+                m.invoke(rm, inst, 0,
+                        RenderableManager.PrimitiveType.TRIANGLES,
+                        this.vb, this.ib, 0, this.indexCount);
+            } catch (Throwable t) {
+                throw new UnsupportedOperationException("setGeometryAt indisponível nesta versão.", t);
+            }
+        });
     }
 
     // -------------------- helpers --------------------
@@ -310,4 +322,6 @@ public class DynamicTriangleMesh {
             return true;
         } catch (Throwable ignore) { return false; }
     }
+
+
 }
