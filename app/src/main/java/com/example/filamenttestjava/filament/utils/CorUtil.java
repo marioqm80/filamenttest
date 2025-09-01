@@ -1,4 +1,4 @@
-package com.example.filamenttestjava.utils;
+package com.example.filamenttestjava.filament.utils;
 
 public class CorUtil {
     public static double[] getCorVarioErico(boolean grayScale, int alfa, double valor, double valorMin, double valorMax, double parte1, double parte2, double parte3){

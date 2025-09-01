@@ -1,4 +1,4 @@
-package com.example.filamenttestjava.utils;
+package com.example.filamenttestjava.filament.utils;
 
 public final class IgcParser {
     private IgcParser() {}

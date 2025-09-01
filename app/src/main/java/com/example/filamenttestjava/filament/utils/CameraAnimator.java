@@ -1,21 +1,21 @@
-package com.example.filamenttestjava.utils;
+package com.example.filamenttestjava.filament.utils;
 
 import android.animation.ValueAnimator;
 import android.os.Handler;
 import android.view.animation.LinearInterpolator;
 
-import androidx.dynamicanimation.animation.DynamicAnimation;
+import com.example.filamenttestjava.filament.app.eventos.NovaPosicaoCameraAtualizada;
 
-import com.google.android.filament.Camera;
+import io.reactivex.rxjava3.subjects.PublishSubject;
 
 public class CameraAnimator {
 
     // NOVO: anima eye E center
-    public static void startEngineAnimator(ValueAnimator engineAnimator, Handler engineHandler, Handler calculoHandler,
-                                    double[] fromEye,    double[] toEye,
+    public static void startEngineAnimator(ValueAnimator engineAnimator,  Handler calculoHandler,
+                                           double[] fromEye, double[] toEye,
                                            double[] fromCenter, double[] toCenter,
-                                    float durMs,
-                                    Camera camera) {
+                                           float durMs,
+                                           PublishSubject<NovaPosicaoCameraAtualizada> publisherNovaPosicao) {
 
 
             engineAnimator.setDuration((long) durMs);
@@ -39,14 +39,10 @@ public class CameraAnimator {
                 double cy = lerp(fromCenter[1], toCenter[1], t);
                 double cz = lerp(fromCenter[2], toCenter[2], t);
 
-                // mesma thread do Engine
-                //engineHandler.post(() -> {
+                NovaPosicaoCameraAtualizada nova = new NovaPosicaoCameraAtualizada(ex, ey, ez, cx, cy, cz, 0, 0, 1);
+                publisherNovaPosicao.onNext(nova);
 
-                Concorrencia.postAndWait(engineHandler, () -> {
 
-                    camera.lookAt(ex, ey, ez, cx, cy, cz, 0f, 0f, 1f);
-                });
-                //});
             });
         // inicia NA thread do engine
         calculoHandler.post(engineAnimator::start);

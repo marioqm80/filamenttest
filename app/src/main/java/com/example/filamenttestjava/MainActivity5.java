@@ -4,23 +4,23 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.view.Choreographer;
+import android.view.KeyEvent;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.WindowManager;
+import android.widget.Toast;
 
-import com.example.filamenttestjava.utils.AssetLinePublisher;
-import com.example.filamenttestjava.utils.CalculoDistancias;
-import com.example.filamenttestjava.utils.CorUtil;
-import com.example.filamenttestjava.utils.IgcParser;
-import com.example.filamenttestjava.vulkanapp.FilamentApp;
-import com.example.filamenttestjava.vulkanapp.Geometry;
+import com.example.filamenttestjava.filament.utils.AssetLinePublisher;
+import com.example.filamenttestjava.filament.utils.CalculoDistancias;
+import com.example.filamenttestjava.filament.utils.CorUtil;
+import com.example.filamenttestjava.filament.utils.IgcParser;
+import com.example.filamenttestjava.filament.app.FilamentApp;
+import com.example.filamenttestjava.filament.app.Geometry;
 import com.google.android.filament.android.DisplayHelper;
 import com.google.android.filament.android.UiHelper;
 
 import java.text.DecimalFormat;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -50,6 +50,8 @@ public class MainActivity5 extends Activity {
 
     private FilamentApp app;
 
+    private PublishSubject<Boolean> volumeAjustado = PublishSubject.create();
+
     private final AssetLinePublisher publisher = new AssetLinePublisher();
 
     private final PublishSubject<double[]> latLonSubject = PublishSubject.create();
@@ -62,6 +64,7 @@ public class MainActivity5 extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        volumeAjustado.serialize();
 
         //Looper looper = Looper.myLooper();      // null se a thread não tiver Looper
         //Handler currentHandler = new Handler(looper);
@@ -70,7 +73,7 @@ public class MainActivity5 extends Activity {
         ht.start();
         Handler currentHandler = new Handler(ht.getLooper());
 
-        app = new FilamentApp(this /*context*/);
+        app = new FilamentApp(this , 300000, volumeAjustado);
 
         publisher.lines()
                 .filter(l -> l != null && l.startsWith("B"))
@@ -222,5 +225,20 @@ public class MainActivity5 extends Activity {
             choreographer.postFrameCallback(this);
             app.render(frameTimeNanos);
         }
+    }
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            // Usuário apertou volume +
+            Toast.makeText(this, "Volume +", Toast.LENGTH_SHORT).show();
+            volumeAjustado.onNext(true);
+            return true; // consome o evento (não passa pro sistema)
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            // Usuário apertou volume -
+            Toast.makeText(this, "Volume -", Toast.LENGTH_SHORT).show();
+            volumeAjustado.onNext(false);
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }

@@ -1,4 +1,4 @@
-package com.example.filamenttestjava.vulkanapp;
+package com.example.filamenttestjava.filament.app;
 
 import com.google.android.filament.Engine;
 import com.google.android.filament.TransformManager;

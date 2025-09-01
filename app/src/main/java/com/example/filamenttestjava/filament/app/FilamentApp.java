@@ -1,22 +1,20 @@
-package com.example.filamenttestjava.vulkanapp;
+package com.example.filamenttestjava.filament.app;
 
 import android.content.Context;
-import android.opengl.Matrix;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.view.Surface;
-import android.view.animation.LinearInterpolator;
 import android.animation.ValueAnimator;
 
 import com.example.filamenttestjava.MainActivity5;
 
-import com.example.filamenttestjava.utils.CalculoVetor;
-import com.example.filamenttestjava.utils.CameraAnimator;
-import com.example.filamenttestjava.utils.Concorrencia;
+import com.example.filamenttestjava.filament.utils.CalculoVetor;
+import com.example.filamenttestjava.filament.utils.CameraAnimator;
+import com.example.filamenttestjava.filament.utils.Concorrencia;
+import com.example.filamenttestjava.filament.app.eventos.NovaPosicaoCameraAtualizada;
 import com.google.android.filament.Box;
 import com.google.android.filament.Camera;
-import com.google.android.filament.Colors;
 import com.google.android.filament.Engine;
 import com.google.android.filament.Entity;
 import com.google.android.filament.EntityManager;
@@ -30,12 +28,10 @@ import com.google.android.filament.Viewport;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 
 import io.reactivex.rxjava3.core.BackpressureStrategy;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import io.reactivex.rxjava3.subjects.Subject;
 
 public class FilamentApp {
 
@@ -72,28 +68,61 @@ public class FilamentApp {
 
     Handler calculoAnimacaoHandler;
 
+    private volatile double distCamera = 25;
+
+    private PublishSubject<NovaPosicaoCameraAtualizada> novaPosicaoCameraAtualizadaPublishSubject;
+
+    private final PublishSubject<Boolean> volumeAjustado;
+
 
 
     /** Construtor padrão (capacidade “ok” para crescer). */
-    public FilamentApp(Context ctx) { this(ctx, 300000); }
+
 
     /** Construtor com capacidade máxima de triângulos. */
-    public FilamentApp(Context ctx, int maxTriangles) {
+    public FilamentApp(Context ctx, int maxTriangles, PublishSubject<Boolean> volumeAjustado) {
+        this.volumeAjustado = volumeAjustado;
+        filamentThread = new HandlerThread("FilamentThread");
+        filamentThread.start();
+        HandlerThread animacaoMotor = new HandlerThread("animacao");
+        animacaoMotor.start();
+        engineHandler = new Handler(filamentThread.getLooper());
+        calculoAnimacaoHandler = new Handler(animacaoMotor.getLooper());
+
+        novaPosicaoCameraAtualizadaPublishSubject = PublishSubject.create();
+        novaPosicaoCameraAtualizadaPublishSubject.serialize();
+        novaPosicaoCameraAtualizadaPublishSubject
+                .toFlowable(BackpressureStrategy.LATEST)
+                        .observeOn(Schedulers.io(), false, 1)
+                                .subscribe(nova -> {
+                                    Concorrencia.postAndWait(engineHandler, () -> {
+                                        camera.lookAt(nova.getEx(), nova.getEy(), nova.getEz(), nova.getCx(), nova.getCy(), nova.getCz(), nova.getUpx(), nova.getUpy(), nova.getUpz());
+                                    });
+
+                                        });
         pedeAtualizarTela.serialize();
         pedeAtualizarTela.toFlowable(BackpressureStrategy.LATEST)
                 .observeOn(Schedulers.io(), false, 1)
                 .subscribe(t -> {
                     List<double[]> antesDepois = (List<double[]>) t;
-                    executaAtualizaNovaPosicaoCamera(antesDepois.get(0), antesDepois.get(1));
+                    executaAtualizaNovaPosicaoCamera(antesDepois.get(0), antesDepois.get(1), distCamera);
                 });
 
-        filamentThread = new HandlerThread("FilamentThread");
-        filamentThread.start();
+        volumeAjustado
+                .subscribeOn(Schedulers.io())
+                .subscribe(vl -> {
+                    if (vl) {
+                        distCamera *= 1.1;
+                    } else {
+                        if (distCamera > 50) {
+                            distCamera *= 0.9;
+                        }
+                    }
+                });
 
-        HandlerThread animacaoMotor = new HandlerThread("animacao");
-        animacaoMotor.start();
-        engineHandler = new Handler(filamentThread.getLooper());
-        calculoAnimacaoHandler = new Handler(animacaoMotor.getLooper());
+        
+
+
 
         this.context = ctx.getApplicationContext();
         this.maxTriangles = maxTriangles;
@@ -186,12 +215,12 @@ public class FilamentApp {
         pedeAtualizarTela.onNext(Arrays.asList(posXYant, posXYatual));
 
     }
-    public synchronized void executaAtualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual) {
+    private synchronized void executaAtualizaNovaPosicaoCamera(double[] posXYant, double[] posXYatual, double distCamera) {
         System.out.println("vai atualizar nova posicao");
         if (cameraAnimator != null && cameraAnimator.isRunning()) {
             return;
         }
-        double z = 250;
+
 
         double distancia = CalculoVetor.distance2D(posXYant, posXYatual);
 
@@ -202,7 +231,7 @@ public class FilamentApp {
 
         normal = CalculoVetor.raiseXYUnitVector(normal, 45);
 
-        double[] proxEye = CalculoVetor.advanceAlong(posXYatual, normal, z);
+        double[] proxEye = CalculoVetor.advanceAlong(posXYatual, normal, distCamera);
 
         if (ultimoEye == null) {
             ultimoEye = proxEye;
@@ -221,14 +250,13 @@ public class FilamentApp {
             this.cameraAnimator = ValueAnimator.ofFloat(0f, 1f);
             CameraAnimator.startEngineAnimator(
                     cameraAnimator,
-                    engineHandler,
                     calculoAnimacaoHandler,
                     eyeAnt,
                     eyeDepois,
                     centerAnt,
                     centerDepois,
-                    (float) (MainActivity5.sleep*20) *0.90f,
-                    camera);
+                    (float) (MainActivity5.sleep) *0.90f,
+                     novaPosicaoCameraAtualizadaPublishSubject);
             this.ultimoCenter = centerDepois.clone();
             this.ultimoEye = eyeDepois.clone();
         }

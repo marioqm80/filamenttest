@@ -1,4 +1,4 @@
-package com.example.filamenttestjava.vulkanapp;
+package com.example.filamenttestjava.filament.app;
 
 import java.util.ArrayList;
 import java.util.Arrays;

@@ -1,8 +1,8 @@
-package com.example.filamenttestjava.vulkanapp;
+package com.example.filamenttestjava.filament.app;
 
 import android.os.Handler;
 
-import com.example.filamenttestjava.utils.Concorrencia;
+import com.example.filamenttestjava.filament.utils.Concorrencia;
 import com.google.android.filament.Engine;
 import com.google.android.filament.IndexBuffer;
 import com.google.android.filament.MathUtils;
